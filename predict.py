@@ -11,7 +11,7 @@ def load_ssd_model(model_path, input_shape=[300, 300], num_classes=10):
     model_path = os.path.expanduser(model_path)
     assert model_path.endswith('.h5'), 'Keras model or weights must be a .h5 file.'
     
-    ssd_model = SSD300([input_shape[0], input_shape[1], 3], num_classes)
+    ssd_model = SSD300([input_shape[0], input_shape[1], 3], num_classes+1)
     ssd_model.load_weights(model_path, by_name=True)
     print('{} model, anchors, and classes loaded.'.format(model_path))
     return ssd_model
@@ -159,7 +159,7 @@ class BBoxUtility(object):
                     confs_to_process = c_confs[c_confs_m]
 
                     # 进行iou的非极大抑制
-                    idx = self.nms(boxes_to_process, confs_to_process, )
+                    idx = self.nms(boxes_to_process, confs_to_process)
 
                     # 取出在非极大抑制中效果较好的内容
                     good_boxes = boxes_to_process[idx]
@@ -311,12 +311,12 @@ def predict(image, model, bbox_util, anchors, input_shape=[300, 300], confidence
 
 if __name__ == '__main__':
     # 加载类别
-    class_names = []
+    class_names = ['baseball','basketball','croquet_ball','golf_ball','ping-pong_ball','puck','rugby_ball','soccer_ball','tennis_ball','volleyball']
 
     input_shape = [300, 300]
 
     # 加载模型
-    model = load_ssd_model('model.h5', input_shape=input_shape, num_classes=len(class_names))
+    model = load_ssd_model('models/mobilenet_ssd.h5', input_shape=input_shape, num_classes=len(class_names))
 
     # 加载先验框
     anchors = get_anchors(input_shape=input_shape, anchors_size=[21, 45, 99, 153, 207, 261, 315])
@@ -377,8 +377,8 @@ if __name__ == '__main__':
             text_origin = np.array([left, top + 1])
 
         for i in range(thickness):
-            draw.rectangle([left + i, top + i, right - i, bottom - i], outline=colors[c])
-        draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=colors[c])
+            draw.rectangle([left + i, top + i, right - i, bottom - i], outline=colors[int(c)])
+        draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=colors[int(c)])
         draw.text(text_origin, str(label,'UTF-8'), fill=(0, 0, 0), font=font)
         del draw
 
