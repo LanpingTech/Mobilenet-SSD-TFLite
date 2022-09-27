@@ -13,3 +13,9 @@ Mobilenet-SSD的模型推理部分与之前YOLO-X的不同，需要注意的是�
 - 其他文件无需翻写修改。
 
 另外，`convert2tflite.py`文件提供了将模型转换为TFLite模型的两种方法，可以参考。
+
+## 结果
+
+![](./test.jpg)
+![](./result.jpg)
+
