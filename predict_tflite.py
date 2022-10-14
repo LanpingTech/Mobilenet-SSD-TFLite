@@ -4,6 +4,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from model import SSD300
 
+import tensorflow as tf
+
 from keras.applications.imagenet_utils import preprocess_input
 
 
@@ -303,11 +305,56 @@ def predict(image, model, bbox_util, anchors, input_shape=[300, 300], confidence
     image_data = preprocess_input(np.expand_dims(np.array(image_data, dtype='float32'), 0))
 
     # 模型计算推理
-    preds = model.predict(image_data)
+    preds = interpreter_compute(model, image_data)[0]
     # 将预测结果进行解码
     results = bbox_util.decode_box(preds, anchors, image_shape, input_shape, letterbox_image=False, confidence=confidence)
 
     return results
+
+def format_input_tensor(tensor, input_details, idx):
+    details = input_details[idx]
+    dtype = details['dtype']
+    if dtype == np.uint8 or dtype == np.int8:
+        quant_params = details['quantization_parameters']
+        input_tensor = tensor / quant_params['scales'] + quant_params['zero_points']
+        if dtype == np.int8:
+            input_tensor = input_tensor.clip(-128, 127)
+        else:
+            input_tensor = input_tensor.clip(0, 255)
+        return input_tensor.astype(dtype)
+    else:
+        return tensor
+
+def get_output_tensor(interpreter, output_details, idx):
+    details = output_details[idx]
+    if details['dtype'] == np.uint8 or details['dtype'] == np.int8:
+        quant_params = details['quantization_parameters']
+        int_tensor = interpreter.get_tensor(details['index']).astype(np.int32)
+        real_tensor = int_tensor - quant_params['zero_points']
+        real_tensor = real_tensor.astype(np.float32) * quant_params['scales']
+    else:
+        real_tensor = interpreter.get_tensor(details['index'])
+    return real_tensor
+
+def init_interpreter(model_path, input_shape=(300,300)):    
+    interpreter = tf.lite.Interpreter(model_path=model_path)
+    interpreter.allocate_tensors()
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+    interpreter.resize_tensor_input(input_details[0]["index"], [1, input_shape[0], input_shape[1], 3])
+    interpreter.allocate_tensors()
+    return interpreter
+
+def interpreter_compute(interpreter, input_data):
+    input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    inputs = format_input_tensor(input_data, input_details, 0) # 注意这个函数
+    interpreter.set_tensor(input_details[0]['index'], inputs)
+    interpreter.invoke()
+    outputs = [get_output_tensor(interpreter, output_details, 0)] # 注意这个函数
+
+    return outputs
 
 if __name__ == '__main__':
     # 加载类别
@@ -316,7 +363,7 @@ if __name__ == '__main__':
     input_shape = [300, 300]
 
     # 加载模型
-    model = load_ssd_model('models/mobilenet_ssd.h5', input_shape=input_shape, num_classes=len(class_names))
+    model = init_interpreter('models/mobilenet_ssd_quantized.tflite')
 
     # 加载先验框
     anchors = get_anchors(input_shape=input_shape, anchors_size=[21, 45, 99, 153, 207, 261, 315])
